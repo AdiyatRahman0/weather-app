@@ -1,1 +1,148 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adyt Weather Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100;300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        /* Gabungan CSS Custom & Tailwind Configuration */
+        body { font-family: 'Outfit', sans-serif; background-color: #050508; color: #fff; }
+        .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(24px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .scrollbar-none::-webkit-scrollbar { display: none; }
+        @keyframes fade-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-up { animation: fade-up 0.5s ease-out forwards; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+        const { 
+            MapPin, Wind, Droplets, Eye, Thermometer, RefreshCw, 
+            CloudRain, Sun, Cloud, CloudSnow, CloudLightning, 
+            Zap, Sunrise, Sunset, AlertTriangle, Gauge, ArrowUp, ArrowDown 
+        } = lucide;
+
+        // --- Logic getSmartSuggestion & getWeatherInfo (Sesuai kode Claude kamu) ---
+        function getSmartSuggestion(temp, weatherCode, windSpeed, humidity) {
+            const tips = [];
+            if (temp >= 30) tips.push({ icon: "☀️", text: "Panas terik! Jangan lupa minum air biar nggak dehidrasi, bro Adyt." });
+            else if (temp >= 20) tips.push({ icon: "🌤️", text: "Cuaca mantap buat nongkrong atau ngoding di luar." });
+            if ([61, 63, 65, 80, 81, 82].includes(weatherCode)) tips.push({ icon: "🌂", text: "Hujan terdeteksi. Sedia payung sebelum basah!" });
+            return tips;
+        }
+
+        function getWeatherInfo(code) {
+            const map = {
+                0: { label: "Cerah Sempurna", gradient: "from-amber-400/20 to-orange-500/10", particle: "☀️" },
+                3: { label: "Mendung", gradient: "from-slate-500/20 to-slate-600/10", particle: "☁️" },
+                61: { label: "Hujan Ringan", gradient: "from-blue-500/20 to-indigo-400/10", particle: "🌧️" },
+                95: { label: "Badai Petir", gradient: "from-purple-700/20 to-indigo-700/10", particle: "⛈️" },
+            };
+            return map[code] || { label: "Berawan", gradient: "from-slate-400/20 to-sky-300/10", particle: "⛅" };
+        }
+
+        // --- Komponen WeatherIcon Modifikasi ---
+        function WeatherIcon({ code }) {
+            if (code === 0) return <span className="text-amber-400">☀️</span>;
+            if (code === 3) return <span className="text-slate-400">☁️</span>;
+            return <span className="text-blue-400">🌧️</span>;
+        }
+
+        // --- Main App Component ---
+        function App() {
+            const [weather, setWeather] = useState(null);
+            const [location, setLocation] = useState(null);
+            const [loading, setLoading] = useState(true);
+
+            const fetchWeather = async (lat, lon) => {
+                try {
+                    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility,surface_pressure&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto`);
+                    const data = await res.json();
+                    setWeather(data);
+                    setLoading(false);
+                } catch (e) { console.error(e); setLoading(false); }
+            };
+
+            useEffect(() => {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    setLocation({ city: "Lokasimu", region: "Sekitar sini" });
+                    fetchWeather(latitude, longitude);
+                }, () => {
+                    fetchWeather(-6.2, 106.8); // Default Jakarta
+                    setLocation({ city: "Jakarta", region: "ID" });
+                });
+            }, []);
+
+            if (loading) return <div className="flex h-screen items-center justify-center text-[#ff0055] animate-pulse">Memuat Data Cuaca...</div>;
+
+            const current = weather?.current;
+            const info = getWeatherInfo(current?.weather_code);
+            const suggestions = getSmartSuggestion(current?.temperature_2m, current?.weather_code);
+
+            return (
+                <div className="max-w-md mx-auto p-6 space-y-6 animate-fade-up">
+                    {/* Hero Card */}
+                    <div className={`relative overflow-hidden rounded-[40px] p-8 glass-card border-white/10 shadow-2xl`}>
+                        <div className={`absolute inset-0 bg-gradient-to-br ${info.gradient} opacity-50`} />
+                        <div className="relative z-10">
+                            <div className="flex items-center gap-2 mb-8">
+                                <div className="w-8 h-8 rounded-full bg-[#ff0055]/20 flex items-center justify-center text-[#ff0055]">
+                                    <i data-lucide="map-pin" className="w-4 h-4"></i>
+                                </div>
+                                <span className="font-bold">{location?.city}</span>
+                            </div>
+                            <div className="flex justify-between items-end">
+                                <div>
+                                    <h1 className="text-8xl font-thin tracking-tighter">{Math.round(current.temperature_2m)}°</h1>
+                                    <p className="text-white/60 mt-2">{info.label}</p>
+                                </div>
+                                <div className="text-7xl">{info.particle}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="glass-card p-5 rounded-3xl flex items-center gap-3">
+                            <div className="text-[#ff0055]"><i data-lucide="droplets"></i></div>
+                            <div><p className="text-[10px] opacity-40 uppercase">Lembab</p><p className="font-bold">{current.relative_humidity_2m}%</p></div>
+                        </div>
+                        <div className="glass-card p-5 rounded-3xl flex items-center gap-3">
+                            <div className="text-[#ff0055]"><i data-lucide="wind"></i></div>
+                            <div><p className="text-[10px] opacity-40 uppercase">Angin</p><p className="font-bold">{current.wind_speed_10m} km/j</p></div>
+                        </div>
+                    </div>
+
+                    {/* Suggestion */}
+                    <div className="rounded-3xl p-6 bg-[#ff0055]/10 border border-[#ff0055]/20 backdrop-blur-xl">
+                        <p className="text-[#ff0055] text-[10px] font-bold tracking-widest mb-4 uppercase">Adyt's Smart Suggestion</p>
+                        {suggestions.map((s, i) => (
+                            <div key={i} className="flex gap-3 text-sm mb-2 opacity-80">
+                                <span>{s.icon}</span><p>{s.text}</p>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <p className="text-center text-[10px] opacity-20 tracking-[0.3em]">POWERED BY OPEN-METEO</p>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+        
+        // Render Icons
+        setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 1000);
+    </script>
+</body>
+</html>
